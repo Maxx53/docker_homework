@@ -1,0 +1,63 @@
+version: '2.4'
+
+services:
+  database:
+    image: postgres:14-bullseye
+    container_name: "database-dc"
+    restart: unless-stopped
+    volumes:
+      - data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_USER
+      - POSTGRES_PASSWORD
+    networks:
+      - back-net
+    healthcheck:
+      test: pg_isready -U ${POSTGRES_USER} 
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  backend:
+    build: ./lib_catalog
+    container_name: "backend-dc"
+    restart: unless-stopped
+    ports:
+      - 8000:8000
+    depends_on:
+      database:
+        condition: service_healthy
+    networks:
+      - back-net
+    healthcheck:
+      test: curl -f http://localhost:8000/api/v1/lib/book/ || exit 1
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  frontend:
+    build: 
+      context: ./frontend
+      args:
+        - SERVER_IP
+    container_name: "frontend-dc"
+    restart: unless-stopped
+    ports:
+      - 8080:80
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - front-net
+    healthcheck:
+      test: curl -f http://localhost || exit 1
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+volumes:
+  data:
+
+networks:
+  back-net:
+  front-net:
